@@ -522,6 +522,73 @@ func TestRunFunction(t *testing.T) {
 				},
 			},
 		},
+		"PolicyResolution": {
+			reason: "The Function should ignore Referenced EnvironmentConfigs that are not found when policy resolution is Optional",
+			args: args{
+				req: &fnv1beta1.RunFunctionRequest{
+					Meta: &fnv1beta1.RequestMeta{Tag: "hello"},
+					Observed: &fnv1beta1.State{
+						Composite: &fnv1beta1.Resource{
+							Resource: resource.MustStructJSON(`{
+								"apiVersion": "test.crossplane.io/v1alpha1",
+								"kind": "XR",
+								"metadata": {
+									"name": "my-xr"
+								},
+								"spec": {
+									"existingEnvSelectorLabel": "someMoreBar"
+								}
+							}`),
+						},
+					},
+					ExtraResources: map[string]*fnv1beta1.Resources{
+						"environment-config-0": {},
+					},
+					Input: resource.MustStructJSON(`{
+						"apiVersion": "template.fn.crossplane.io/v1beta1",
+						"kind": "Input",
+						"spec": {
+							"policy": {
+								"resolution": "Optional"
+							},
+							"environmentConfigs": [
+								{	
+									"type": "Reference",
+									"ref": {	
+										"name": "my-env-config"
+									}
+								}
+							]
+						}
+					}`),
+				},
+			},
+			want: want{
+				rsp: &fnv1beta1.RunFunctionResponse{
+					Meta:    &fnv1beta1.ResponseMeta{Tag: "hello", Ttl: durationpb.New(response.DefaultTTL)},
+					Results: []*fnv1beta1.Result{},
+					Context: &structpb.Struct{
+						Fields: map[string]*structpb.Value{
+							FunctionContextKeyEnvironment: structpb.NewStructValue(resource.MustStructJSON(`{
+								"apiVersion": "internal.crossplane.io/v1alpha1",
+								"kind": "Environment"
+							}`)),
+						},
+					},
+					Requirements: &fnv1beta1.Requirements{
+						ExtraResources: map[string]*fnv1beta1.ResourceSelector{
+							"environment-config-0": {
+								ApiVersion: "apiextensions.crossplane.io/v1alpha1",
+								Kind:       "EnvironmentConfig",
+								Match: &fnv1beta1.ResourceSelector_MatchName{
+									MatchName: "my-env-config",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for name, tc := range cases {
